@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: hr-lead-finder
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT
+    envVars:
+      - {key: PYTHON_VERSION, value: 3.12.3}
+      - {key: APP_PASSWORD, sync: false}
+      - {key: ADZUNA_APP_ID, sync: false}
+      - {key: ADZUNA_APP_KEY, sync: false}
+      - {key: REED_API_KEY, sync: false}
+      - {key: BRAVE_API_KEY, sync: false}
+      - {key: COMPANIES_HOUSE_API_KEY, sync: false}
+      - {key: CONTACT_EMAIL, sync: false}

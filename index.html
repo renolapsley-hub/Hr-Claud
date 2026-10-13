@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HR Lead Finder</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#17202b;--mute:#5d6b7a;--line:#dde3e9;--accent:#0d6e6e;--accent-ink:#fff;
+--hi:#14733c;--med:#9a6700;--low:#a33a2b;--chip:#eaf0f4}
+@media(prefers-color-scheme:dark){:root{--bg:#12171c;--card:#1b232b;--ink:#e9eef3;--mute:#9aa8b6;--line:#2c3742;--accent:#3fb8b0;--accent-ink:#06201e;--hi:#59c985;--med:#e0b341;--low:#f08a7a;--chip:#26323d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{padding:14px 16px 4px;display:flex;justify-content:space-between;align-items:center}
+h1{font-size:20px;margin:0}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 14px;min-height:44px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn:disabled{opacity:.5}
+main{padding:8px 12px 80px;max-width:900px;margin:0 auto}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}
+@media(min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:24px}.stat span{color:var(--mute);font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.row>*{flex:1 1 140px}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:44px}
+.filters{display:none;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.filters.open{display:grid}
+.filters .wide{grid-column:1/-1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;cursor:pointer}
+.card h3{margin:0;font-size:17px;display:flex;justify-content:space-between;gap:8px}
+.score{background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:0 8px;font-weight:700;min-width:38px;text-align:center}
+.sub{color:var(--mute);font-size:14px;margin:2px 0}
+.chip{display:inline-block;background:var(--chip);border-radius:6px;padding:1px 7px;font-size:12px;margin-right:4px}
+.High{color:var(--hi)}.Medium{color:var(--med)}.Low{color:var(--low)}.none{color:var(--mute)}
+#banner{display:none;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:14px}
+#banner.err{border-left-color:var(--low)}
+progress{width:100%;height:8px}
+.sheet{position:fixed;inset:0;background:var(--bg);overflow:auto;display:none;padding:env(safe-area-inset-top) 14px 40px;z-index:5}
+.sheet.open{display:block}
+.sheet h2{margin:10px 0 2px}.sheet h4{margin:18px 0 6px}
+.item{border-top:1px solid var(--line);padding:8px 0;font-size:15px}
+a{color:var(--accent)}
+.empty{text-align:center;color:var(--mute);padding:30px 10px}
+.small{font-size:13px;color:var(--mute)}
+</style>
+</head>
+<body>
+<header><h1>HR Lead Finder</h1><button class="btn" onclick="openSettings()">Settings</button></header>
+<main>
+  <div id="setup"></div>
+  <div class="stats" id="stats"></div>
+  <div class="row">
+    <button class="btn primary" id="bRefresh" onclick="refresh()">Refresh jobs</button>
+    <button class="btn primary" id="bEnrich" onclick="enrichAll()">Find phone numbers</button>
+    <button class="btn" onclick="exportMenu()">Export</button>
+  </div>
+  <div id="banner"></div>
+  <div class="row"><input id="q" type="search" placeholder="Search company, job, place" oninput="debounce()">
+    <button class="btn" onclick="document.getElementById('filters').classList.toggle('open')">Filters</button></div>
+  <div class="filters" id="filters">
+    <select id="fTitle" onchange="load()"><option value="">Any job title</option></select>
+    <select id="fSource" onchange="load()"><option value="">Any source</option></select>
+    <input id="fLocation" placeholder="Location contains…" oninput="debounce()">
+    <select id="fDays" onchange="load()"><option value="">Posted any time</option><option value="3">Last 3 days</option><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option></select>
+    <select id="fPhone" onchange="load()"><option value="">Any phone status</option><option value="found">Phone found</option><option value="verified">Verified only</option><option value="missing">No phone found</option></select>
+    <select id="fStatus" onchange="load()"><option value="">Any outreach status</option><option value="new">New</option><option value="contacted">Contacted</option><option value="qualified">Qualified</option><option value="not_relevant">Not relevant</option></select>
+    <input id="fScore" type="number" inputmode="numeric" placeholder="Min score" oninput="debounce()">
+    <select id="fSort" onchange="load()"><option value="score">Sort: score</option><option value="recent">Sort: newest</option><option value="name">Sort: name</option></select>
+    <label class="wide small"><input type="checkbox" id="fAgencies" style="width:auto;min-height:0" onchange="load()"> Include recruitment agencies as advertisers</label>
+  </div>
+  <div id="list"></div>
+  <p class="small" id="foot">Job data: Adzuna and Reed APIs. Jobs by <a href="https://www.adzuna.co.uk" target="_blank" rel="noopener">Adzuna</a>.
+  A job advert is a signal, not proof that a company wants to buy services.</p>
+</main>
+
+<div class="sheet" id="sheet"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl=u=>/^https?:\/\//i.test(u||"")?esc(u):"#";
+const LABEL={new:"New",contacted:"Contacted",qualified:"Qualified",not_relevant:"Not relevant"};
+let timer,polling,STATUS={};
+async function api(path,opts){
+  const r=await fetch(path,opts?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(opts)}:undefined);
+  let data={};try{data=await r.json()}catch(e){}
+  if(!r.ok||data.error)throw new Error(data.error||("Server problem (HTTP "+r.status+")"));return data}
+function debounce(){clearTimeout(timer);timer=setTimeout(load,300)}
+function banner(msg,isErr){const b=$("banner");b.style.display=msg?"block":"none";b.className=isErr?"err":"";b.innerHTML=msg||""}
+
+async function init(){
+  try{STATUS=await api("/api/status")}catch(e){banner(esc(e.message),true);return}
+  const off=STATUS.sources.filter(s=>!s.configured);
+  $("setup").innerHTML=!STATUS.sources.some(s=>s.configured)
+   ?`<div class="card" style="cursor:default"><b>Setup needed:</b> no job source is connected yet. ${off.map(s=>esc(s.hint)).join(" ")} See the README, then restart the app.</div>`:"";
+  $("fTitle").innerHTML='<option value="">Any job title</option>'+STATUS.roles.map(r=>`<option>${esc(r)}</option>`).join("");
+  $("fSource").innerHTML='<option value="">Any source</option>'+STATUS.sources.map(s=>`<option>${esc(s.name)}</option>`).join("");
+  if(STATUS.task&&STATUS.task.state==="running")watch(STATUS.task.id);
+  stats();load()}
+async function stats(){
+  const s=await api("/api/stats");
+  $("stats").innerHTML=[["Active HR jobs",s.jobs],["Companies",s.companies],["Verified phones",`${s.phones_verified} <small>of ${s.phones_found} found</small>`],["New this week",s.new_leads]]
+   .map(([l,v])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("")}
+async function load(){
+  const p=new URLSearchParams({q:$("q").value,title:$("fTitle").value,source:$("fSource").value,location:$("fLocation").value,
+   days:$("fDays").value,phone:$("fPhone").value,status:$("fStatus").value,min_score:$("fScore").value,sort:$("fSort").value,agencies:$("fAgencies").checked?"1":""});
+  try{const rows=await api("/api/leads?"+p);
+   $("list").innerHTML=rows.length?rows.map(card).join(""):
+    `<div class="empty">No leads yet.<br>Tap <b>Refresh jobs</b> to pull current HR vacancies from your connected sources.</div>`}
+  catch(e){banner(esc(e.message),true)}}
+function phoneLine(p,st){
+  if(p)return `<span class="${p.confidence}">${esc(p.number)}</span> <span class="chip ${p.confidence}">${p.confidence}</span>`;
+  return `<span class="none">Not found</span> <span class="chip">${esc(st||"Pending")}</span>`}
+function card(c){return `<div class="card" onclick="openLead(${c.id})"><h3><span>${esc(c.name)}</span><span class="score">${c.score}</span></h3>
+ <div class="sub">${esc(c.top_job.title)} · ${esc(c.top_job.location)}</div>
+ <div class="sub">${c.active_jobs} active · newest ${esc(c.newest||"n/a")} · ${esc(c.top_job.source)}${c.is_agency?' · <span class="Low">agency?</span>':""}</div>
+ <div class="sub">${phoneLine(c.phone,c.enrichment_status)}</div>
+ <div class="sub"><span class="chip">${LABEL[c.outreach_status]||c.outreach_status}</span>${c.website?`<span class="chip">website found</span>`:""}</div></div>`}
+
+async function openLead(id){
+  const d=await api("/api/leads/"+id);const sh=$("sheet");sh.classList.add("open");sh.scrollTop=0;
+  const ph=d.phones.map(p=>`<div class="item"><b class="${p.confidence}">${esc(p.number_intl)}</b> <span class="chip">${esc(p.phone_type)}</span> <span class="chip ${p.confidence}">${p.confidence}</span>
+   ${p.status!=="current"?`<span class="chip">${esc(p.status)}</span>`:""}${p.matches_job_location?'<span class="chip">near job location</span>':""}
+   <div class="small">${esc(p.verification)}${p.location_label?" · "+esc(p.location_label):""} · checked ${esc((p.verified_at||"").slice(0,10))}</div>
+   <div class="small">Source: <a href="${safeUrl(p.source_url)}" target="_blank" rel="noopener">${esc(p.source_url)}</a></div>${p.note?`<div class="small">${esc(p.note)}</div>`:""}</div>`).join("")
+   ||`<div class="item"><b class="none">Not found</b><div class="small">${esc(d.enrichment_status)}${d.enrichment_note?" — "+esc(d.enrichment_note):""}</div></div>`;
+  const jobs=d.jobs.map(j=>`<div class="item"><a href="${safeUrl(j.url)}" target="_blank" rel="noopener"><b>${esc(j.title)}</b></a>
+   <div class="small">${esc(j.location)} · ${esc(j.employment_type||"type n/a")} · posted ${esc(j.date_posted||"n/a")} · ${esc(j.source)} · ${esc(j.status)}</div>
+   <div class="small">${esc((j.description||"").slice(0,280))}${(j.description||"").length>280?"…":""}</div></div>`).join("");
+  const dms=d.decision_makers.map(m=>`<div class="item"><b>${esc(m.name)}</b>, ${esc(m.title)}<div class="small">${esc(m.verification)} · <a href="${safeUrl(m.source_url)}" target="_blank" rel="noopener">source</a>
+   <a href="#" onclick="delDm(${m.id},${d.id});return false"> remove</a></div></div>`).join("")||'<div class="small">None recorded. Only add names that a public page supports.</div>';
+  sh.innerHTML=`<button class="btn" onclick="closeSheet()">← Back</button><h2>${esc(d.name)} <span class="score">${d.score}</span></h2>
+  <div class="small">${d.score_explain.map(esc).join("<br>")}</div>
+  <p class="small">A job advert shows a hiring need, not that this company will buy recruitment services. A switchboard number is not the HR team's direct line.</p>
+  <h4>Company</h4><div class="item">Website: ${d.website?`<a href="${safeUrl(d.website)}" target="_blank" rel="noopener">${esc(d.website)}</a> <span class="chip ${d.website_confidence}">${d.website_confidence} via ${esc(d.website_method)}</span>`:"not identified"}
+   ${d.careers_url?`<br>Careers: <a href="${safeUrl(d.careers_url)}" target="_blank" rel="noopener">${esc(d.careers_url)}</a>`:""}
+   ${d.company_number?`<br>Companies House no. ${esc(d.company_number)} · ${esc(d.registry_status||"")} · ${esc(d.registered_address||"")}`:""}
+   <div class="row"><input id="webIn" placeholder="Paste official website to correct it"><button class="btn" onclick="setWeb(${d.id})">Save website</button></div></div>
+  <h4>Phone numbers</h4>${ph}
+  <div class="row"><button class="btn primary" id="bOne" onclick="enrichOne(${d.id})">Find phone number now</button></div>
+  <h4>Outreach</h4><div class="row"><select id="oStatus">${Object.entries(LABEL).map(([k,v])=>`<option value="${k}" ${k===d.outreach_status?"selected":""}>${v}</option>`).join("")}</select></div>
+  <textarea id="oNotes" rows="3" placeholder="Notes">${esc(d.outreach_notes)}</textarea>
+  <div class="row"><button class="btn primary" onclick="saveOutreach(${d.id})">Save status & notes</button></div>
+  <h4>HR decision-makers</h4>${dms}
+  <div class="row"><input id="dmName" placeholder="Name"><input id="dmTitle" placeholder="Job title"><input id="dmSrc" placeholder="Source URL (required)"></div>
+  <div class="row"><button class="btn" onclick="addDm(${d.id})">Add decision-maker</button></div>
+  <h4>Job listings (${d.jobs.length})</h4>${jobs}`}
+function closeSheet(){$("sheet").classList.remove("open");load();stats()}
+async function saveOutreach(id){try{await api(`/api/leads/${id}/outreach`,{status:$("oStatus").value,notes:$("oNotes").value});banner("Saved.")}catch(e){banner(esc(e.message),true)}}
+async function setWeb(id){try{await api(`/api/leads/${id}/website`,{website:$("webIn").value});await enrichOne(id)}catch(e){banner(esc(e.message),true)}}
+async function addDm(id){try{await api(`/api/leads/${id}/decision-makers`,{name:$("dmName").value,title:$("dmTitle").value,source_url:$("dmSrc").value});openLead(id)}catch(e){alert(e.message)}}
+async function delDm(did,id){await fetch("/api/decision-makers/"+did,{method:"DELETE"});openLead(id)}
+
+async function startTask(path,body){
+  try{const t=await api(path,body||{});if(t.task)watch(t.task)}catch(e){banner(esc(e.message),true)}}
+const refresh=()=>startTask("/api/refresh",{pages:1,max_days:14});
+const enrichAll=()=>startTask("/api/enrich",{limit:25});
+const enrichOne=id=>startTask("/api/enrich",{company_id:id});
+function watch(tid){
+  clearInterval(polling);["bRefresh","bEnrich"].forEach(b=>$(b).disabled=true);
+  polling=setInterval(async()=>{
+    try{const t=await api("/api/tasks/"+tid);
+      const bar=t.total?`<progress value="${t.done}" max="${t.total}"></progress>`:"";
+      if(t.state==="running"){banner(`<b>${esc(t.kind)} running…</b> ${t.done}/${t.total||"?"} ${bar}<div class="small">${esc((t.log.slice(-1)[0])||"")}</div>`);return}
+      clearInterval(polling);["bRefresh","bEnrich"].forEach(b=>$(b).disabled=false);
+      const errs=t.errors.length?`<div class="small"><b>Some things failed (the rest worked):</b><br>${t.errors.slice(0,6).map(esc).join("<br>")}</div>`:"";
+      banner(`<b>${esc(t.summary)}</b>${errs}`,t.state==="error");stats();load();
+    }catch(e){clearInterval(polling);banner(esc(e.message),true)}},1500)}
+
+function exportMenu(){
+  banner(`<b>Export all leads</b><div class="row"><a class="btn" href="/api/export.csv">CSV (Excel / Sheets)</a><a class="btn" href="/api/export.xlsx">Excel (.xlsx)</a><a class="btn" href="/api/db/download">Database backup</a></div>`)}
+function openSettings(){
+  const sh=$("sheet");sh.classList.add("open");
+  const roles=STATUS.roles||[];
+  api("/api/settings/weights").then(w=>{
+  sh.innerHTML=`<button class="btn" onclick="closeSheet()">← Back</button><h2>Settings</h2>
+   <h4>Job sources</h4>${STATUS.sources.map(s=>`<div class="item"><b>${esc(s.name)}</b>: ${s.configured?'<span class="High">connected</span>':'<span class="Low">not connected</span> — '+esc(s.hint)}</div>`).join("")}
+   <div class="item">Website search (Brave): ${STATUS.brave?"on":"off (optional)"} · Companies House check: ${STATUS.registry?"on":"off (optional)"} · Password: ${STATUS.password_set?"on":"<b class=Low>OFF — set APP_PASSWORD when hosted online</b>"}</div>
+   <h4>Search without an API key</h4><p class="small">LinkedIn and Indeed do not allow automated scraping, so open their searches yourself:</p>
+   ${["HR Manager","Head of HR","HR Director","Talent Acquisition Manager","HR Business Partner"].map(r=>`<div class="item">${esc(r)} — <a target="_blank" rel="noopener" href="https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(r)}&location=United%20Kingdom&f_TPR=r604800">LinkedIn</a> · <a target="_blank" rel="noopener" href="https://uk.indeed.com/jobs?q=${encodeURIComponent(r)}&fromage=7">Indeed</a></div>`).join("")}
+   <h4>Lead score weights</h4><p class="small">Points added for each signal. Scores are capped at 100.</p>
+   ${Object.entries(w.weights).map(([k,v])=>`<div class="row"><label style="flex:2">${esc(k.replaceAll("_"," "))}</label><input style="flex:1" type="number" step="1" data-w="${esc(k)}" value="${v}"></div>`).join("")}
+   <div class="row"><button class="btn primary" onclick="saveWeights()">Save weights</button><button class="btn" onclick="recheck()">Recheck old listings</button></div>`})}
+async function saveWeights(){const o={};document.querySelectorAll("[data-w]").forEach(i=>o[i.dataset.w]=i.value);
+  try{await api("/api/settings/weights",o);alert("Saved. Scores updated.")}catch(e){alert(e.message)}}
+function recheck(){closeSheet();startTask("/api/recheck",{})}
+init();
+</script>
+</body>
+</html>
